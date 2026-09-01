@@ -128,6 +128,11 @@ export class ApprovalService {
     }
 
     const slot = await postRepository.createSlot(variantId, scheduledAt);
+    await postRepository.createScheduledJob({
+      variantId,
+      slotId: slot.id,
+      scheduledAt
+    });
     await postRepository.createAuditLog(variantId, 'approved', 'approved', `Scheduled for ${scheduledAt.toISOString()}`);
     return slot;
   }

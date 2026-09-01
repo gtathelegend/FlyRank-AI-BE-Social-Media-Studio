@@ -3,11 +3,13 @@ import {
   Variant,
   Slot,
   PublishAttempt,
+  ScheduledJob,
   VariantAuditLog,
   SourceType,
   PlatformType,
   VariantStatus,
   PublishAttemptStatus,
+  JobStatus,
   ValidationInfo
 } from '../models/types.js';
 import crypto from 'crypto';
@@ -36,12 +38,20 @@ export interface CreatePublishAttemptDTO {
   metadata?: Record<string, unknown>;
 }
 
+export interface CreateScheduledJobDTO {
+  variantId: string;
+  slotId: string;
+  scheduledAt: Date;
+  maxAttempts?: number;
+}
+
 export class PostRepository {
   private postsMap = new Map<string, Post>();
   private variantsMap = new Map<string, Variant>();
   private slotsMap = new Map<string, Slot>();
   private attemptsMap = new Map<string, PublishAttempt>();
   private auditLogsMap = new Map<string, VariantAuditLog[]>();
+  private jobsMap = new Map<string, ScheduledJob>();
 
   public async createPost(dto: CreatePostDTO): Promise<Post> {
     const now = new Date();
@@ -472,12 +482,298 @@ export class PostRepository {
     return this.auditLogsMap.get(variantId) || [];
   }
 
-  public clearAll(): void {
+  // Scheduled Jobs Repository Methods
+  public async createScheduledJob(dto: CreateScheduledJobDTO): Promise<ScheduledJob> {
+    const now = new Date();
+    const id = crypto.randomUUID();
+
+    const job: ScheduledJob = {
+      id,
+      variant_id: dto.variantId,
+      slot_id: dto.slotId,
+      scheduled_at: dto.scheduledAt,
+      status: 'pending',
+      attempts: 0,
+      max_attempts: dto.maxAttempts || 3,
+      claimed_at: null,
+      available_at: now,
+      last_error: null,
+      published_at: null,
+      created_at: now,
+      updated_at: now
+    };
+
+    this.jobsMap.set(job.id, job);
+
+    if (isDbConnected) {
+      await query(
+        `INSERT INTO scheduled_jobs (id, variant_id, slot_id, scheduled_at, status, attempts, max_attempts, available_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (variant_id, slot_id) DO NOTHING`,
+        [
+          job.id,
+          job.variant_id,
+          job.slot_id,
+          job.scheduled_at,
+          job.status,
+          job.attempts,
+          job.max_attempts,
+          job.available_at,
+          job.created_at,
+          job.updated_at
+        ]
+      );
+    }
+
+    return job;
+  }
+
+  public async getScheduledJobById(id: string): Promise<ScheduledJob | null> {
+    if (isDbConnected) {
+      const res = await query(`SELECT * FROM scheduled_jobs WHERE id = $1`, [id]);
+      if (res && res.rows.length > 0) {
+        const row = res.rows[0];
+        return {
+          id: row.id,
+          variant_id: row.variant_id,
+          slot_id: row.slot_id,
+          scheduled_at: new Date(row.scheduled_at),
+          status: row.status,
+          attempts: row.attempts,
+          max_attempts: row.max_attempts,
+          claimed_at: row.claimed_at ? new Date(row.claimed_at) : null,
+          available_at: new Date(row.available_at),
+          last_error: row.last_error,
+          published_at: row.published_at ? new Date(row.published_at) : null,
+          created_at: new Date(row.created_at),
+          updated_at: new Date(row.updated_at)
+        };
+      }
+      return null;
+    }
+    return this.jobsMap.get(id) || null;
+  }
+
+  public async getScheduledJobBySlotId(slotId: string): Promise<ScheduledJob | null> {
+    if (isDbConnected) {
+      const res = await query(`SELECT * FROM scheduled_jobs WHERE slot_id = $1`, [slotId]);
+      if (res && res.rows.length > 0) {
+        const row = res.rows[0];
+        return {
+          id: row.id,
+          variant_id: row.variant_id,
+          slot_id: row.slot_id,
+          scheduled_at: new Date(row.scheduled_at),
+          status: row.status,
+          attempts: row.attempts,
+          max_attempts: row.max_attempts,
+          claimed_at: row.claimed_at ? new Date(row.claimed_at) : null,
+          available_at: new Date(row.available_at),
+          last_error: row.last_error,
+          published_at: row.published_at ? new Date(row.published_at) : null,
+          created_at: new Date(row.created_at),
+          updated_at: new Date(row.updated_at)
+        };
+      }
+      return null;
+    }
+    for (const job of this.jobsMap.values()) {
+      if (job.slot_id === slotId) {
+        return job;
+      }
+    }
+    return null;
+  }
+
+  public async getDueJobs(now: Date = new Date(), limit: number = 10): Promise<ScheduledJob[]> {
+    if (isDbConnected) {
+      const res = await query(
+        `SELECT * FROM scheduled_jobs
+         WHERE status = 'pending' AND scheduled_at <= $1 AND available_at <= $1
+         ORDER BY scheduled_at ASC
+         LIMIT $2`,
+        [now, limit]
+      );
+      if (res) {
+        return res.rows.map((row) => ({
+          id: row.id,
+          variant_id: row.variant_id,
+          slot_id: row.slot_id,
+          scheduled_at: new Date(row.scheduled_at),
+          status: row.status,
+          attempts: row.attempts,
+          max_attempts: row.max_attempts,
+          claimed_at: row.claimed_at ? new Date(row.claimed_at) : null,
+          available_at: new Date(row.available_at),
+          last_error: row.last_error,
+          published_at: row.published_at ? new Date(row.published_at) : null,
+          created_at: new Date(row.created_at),
+          updated_at: new Date(row.updated_at)
+        }));
+      }
+    }
+
+    const due: ScheduledJob[] = [];
+    for (const job of this.jobsMap.values()) {
+      if (job.status === 'pending' && job.scheduled_at.getTime() <= now.getTime() && job.available_at.getTime() <= now.getTime()) {
+        due.push(job);
+      }
+    }
+    return due.sort((a, b) => a.scheduled_at.getTime() - b.scheduled_at.getTime()).slice(0, limit);
+  }
+
+  public async claimDueJobs(now: Date = new Date(), limit: number = 10): Promise<ScheduledJob[]> {
+    if (isDbConnected) {
+      const res = await query(
+        `WITH due AS (
+           SELECT id FROM scheduled_jobs
+           WHERE status = 'pending' AND scheduled_at <= $1 AND available_at <= $1
+           ORDER BY scheduled_at ASC
+           FOR UPDATE SKIP LOCKED
+           LIMIT $2
+         )
+         UPDATE scheduled_jobs sj
+         SET status = 'processing',
+             claimed_at = $1,
+             updated_at = $1
+         FROM due
+         WHERE sj.id = due.id
+         RETURNING sj.*`,
+        [now, limit]
+      );
+      if (res) {
+        return res.rows.map((row) => ({
+          id: row.id,
+          variant_id: row.variant_id,
+          slot_id: row.slot_id,
+          scheduled_at: new Date(row.scheduled_at),
+          status: row.status,
+          attempts: row.attempts,
+          max_attempts: row.max_attempts,
+          claimed_at: row.claimed_at ? new Date(row.claimed_at) : null,
+          available_at: new Date(row.available_at),
+          last_error: row.last_error,
+          published_at: row.published_at ? new Date(row.published_at) : null,
+          created_at: new Date(row.created_at),
+          updated_at: new Date(row.updated_at)
+        }));
+      }
+    }
+
+    const dueJobs = await this.getDueJobs(now, limit);
+    const claimed: ScheduledJob[] = [];
+    for (const job of dueJobs) {
+      job.status = 'processing';
+      job.claimed_at = now;
+      job.updated_at = now;
+      this.jobsMap.set(job.id, job);
+      claimed.push(job);
+    }
+    return claimed;
+  }
+
+  public async getStaleProcessingJobs(staleBefore: Date): Promise<ScheduledJob[]> {
+    if (isDbConnected) {
+      const res = await query(
+        `SELECT * FROM scheduled_jobs
+         WHERE status = 'processing' AND claimed_at IS NOT NULL AND claimed_at < $1`,
+        [staleBefore]
+      );
+      if (res) {
+        return res.rows.map((row) => ({
+          id: row.id,
+          variant_id: row.variant_id,
+          slot_id: row.slot_id,
+          scheduled_at: new Date(row.scheduled_at),
+          status: row.status,
+          attempts: row.attempts,
+          max_attempts: row.max_attempts,
+          claimed_at: row.claimed_at ? new Date(row.claimed_at) : null,
+          available_at: new Date(row.available_at),
+          last_error: row.last_error,
+          published_at: row.published_at ? new Date(row.published_at) : null,
+          created_at: new Date(row.created_at),
+          updated_at: new Date(row.updated_at)
+        }));
+      }
+    }
+
+    const stale: ScheduledJob[] = [];
+    for (const job of this.jobsMap.values()) {
+      if (job.status === 'processing' && job.claimed_at && job.claimed_at.getTime() < staleBefore.getTime()) {
+        stale.push(job);
+      }
+    }
+    return stale;
+  }
+
+  public async updateScheduledJob(id: string, updates: Partial<ScheduledJob>): Promise<ScheduledJob> {
+    const job = await this.getScheduledJobById(id);
+    if (!job) {
+      throw new Error(`Scheduled job not found: ${id}`);
+    }
+
+    const updated: ScheduledJob = {
+      ...job,
+      ...updates,
+      updated_at: new Date()
+    };
+
+    this.jobsMap.set(id, updated);
+
+    if (isDbConnected) {
+      await query(
+        `UPDATE scheduled_jobs
+         SET status = $1, attempts = $2, claimed_at = $3, available_at = $4, last_error = $5, published_at = $6, updated_at = $7
+         WHERE id = $8`,
+        [
+          updated.status,
+          updated.attempts,
+          updated.claimed_at,
+          updated.available_at,
+          updated.last_error ? JSON.stringify(updated.last_error) : null,
+          updated.published_at,
+          updated.updated_at,
+          id
+        ]
+      );
+    }
+
+    return updated;
+  }
+
+  public async getAllPublishAttempts(): Promise<PublishAttempt[]> {
+    if (isDbConnected) {
+      const res = await query(`SELECT * FROM publish_attempts ORDER BY attempted_at DESC`);
+      if (res) {
+        return res.rows.map((row) => ({
+          id: row.id,
+          variant_id: row.variant_id,
+          slot_id: row.slot_id,
+          idempotency_key: row.idempotency_key,
+          status: row.status,
+          attempted_at: new Date(row.attempted_at),
+          completed_at: row.completed_at ? new Date(row.completed_at) : null,
+          external_post_id: row.external_post_id,
+          error_info: row.error_info,
+          metadata: row.metadata
+        }));
+      }
+    }
+    const results = Array.from(this.attemptsMap.values());
+    return results.sort((a, b) => b.attempted_at.getTime() - a.attempted_at.getTime());
+  }
+
+  public async clearAll(): Promise<void> {
     this.postsMap.clear();
     this.variantsMap.clear();
     this.slotsMap.clear();
     this.attemptsMap.clear();
     this.auditLogsMap.clear();
+    this.jobsMap.clear();
+    if (isDbConnected) {
+      await query(`TRUNCATE TABLE scheduled_jobs, publish_attempts, slots, variants, posts CASCADE`);
+    }
   }
 }
 

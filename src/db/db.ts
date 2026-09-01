@@ -26,12 +26,16 @@ export async function initDatabase(): Promise<boolean> {
     isDbConnected = true;
     console.log(`[Database] Connected to PostgreSQL at ${env.POSTGRES_HOST}:${env.POSTGRES_PORT}/${env.POSTGRES_DB}`);
 
-    // Apply schema migration
-    const migrationPath = path.resolve(process.cwd(), 'src/db/migrations/001_initial_schema.sql');
-    if (fs.existsSync(migrationPath)) {
-      const sql = fs.readFileSync(migrationPath, 'utf-8');
-      await pool.query(sql);
-      console.log('[Database] Schema migration 001_initial_schema.sql applied successfully.');
+    // Apply schema migrations in order
+    const migrationsDir = path.resolve(process.cwd(), 'src/db/migrations');
+    if (fs.existsSync(migrationsDir)) {
+      const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+      for (const file of files) {
+        const filePath = path.join(migrationsDir, file);
+        const sql = fs.readFileSync(filePath, 'utf-8');
+        await pool.query(sql);
+        console.log(`[Database] Schema migration ${file} applied successfully.`);
+      }
     }
 
     return true;

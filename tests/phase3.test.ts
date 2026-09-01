@@ -59,7 +59,7 @@ describe('Phase 3 — Human Approval Workflow & Scheduling Gate', () => {
   let sampleDraftVariantId: string;
 
   beforeEach(async () => {
-    postRepository.clearAll();
+    await postRepository.clearAll();
 
     const post = await postRepository.createPost({
       sourceType: 'markdown',

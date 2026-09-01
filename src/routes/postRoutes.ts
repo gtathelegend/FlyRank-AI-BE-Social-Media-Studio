@@ -18,7 +18,9 @@ postRouter.put('/variants/:id', approvalController.editVariant);
 postRouter.post('/variants/:id/schedule', approvalController.scheduleVariant);
 postRouter.get('/variants/:id/history', approvalController.getVariantHistory);
 
-// Phase 4: Publishing & Idempotency Ledger
+// Phase 4 & 5: Publishing, Idempotency Ledger & History
 postRouter.post('/variants/:id/publish', publishingController.publishVariant);
 postRouter.get('/variants/:id/attempts', publishingController.getVariantPublishAttempts);
 postRouter.get('/publish-attempts/:id', publishingController.getPublishAttemptById);
+postRouter.get('/publish-history', publishingController.getPublishHistory);
+postRouter.get('/publish-attempts', publishingController.getPublishHistory);

@@ -92,6 +92,18 @@ export class PublishingController {
     }
   };
 
+  public getPublishHistory = async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const history = await publishingService.getPublishHistory();
+      res.status(200).json({
+        total: history.length,
+        history
+      });
+    } catch (err: any) {
+      this.handleError(res, err);
+    }
+  };
+
   private handleError(res: Response, err: any): void {
     if (err.statusCode === 404) {
       res.status(404).json({

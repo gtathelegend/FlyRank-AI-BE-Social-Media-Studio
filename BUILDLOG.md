@@ -35,3 +35,14 @@
 4. Updated `PublishingService.publishVariant` to check DB idempotency ledger before approval guard for idempotent replay.
 5. Executed `scratch/e2e_verify.ts`: Post created -> Variants generated -> Discord variant approved -> Slot created -> Real Discord webhook message delivered -> Duplicate request returned `isReplay: true`.
 6. Executed `npm run build` (0 TypeScript errors) and `npm test` (54/54 tests passed).
+
+---
+
+## Phase 5 — Scheduling, Worker, Crash Recovery & Publish History (2026-09-01)
+
+### Technical Architecture & Implementation
+1. **Durable Job Store**: Added SQL schema migration `002_scheduler.sql` creating `scheduled_jobs` with indexes for due job selection (`status`, `scheduled_at`, `available_at`) and atomic claiming.
+2. **Worker Daemon**: Built `PublishWorker` (`src/workers/publishWorker.ts`) implementing atomic job claiming via `FOR UPDATE SKIP LOCKED`, exponential backoff retry scheduling, and stale job lease recovery.
+3. **Crash Recovery & Zero Duplicate Guarantee**: `PublishWorker.recoverStaleJobs` cross-checks the Phase 4 `publish_attempts` idempotency ledger (`SAME VARIANT + SLOT = 1 PUBLICATION`) when recovering stale `processing` jobs. If external publication already succeeded before a worker process crash, the job transitions directly to `published` without duplicate webhook invocation.
+4. **Publish History Endpoint**: Added `GET /publish-history` and `GET /publish-attempts` endpoints querying combined attempt and scheduling history sorted newest first with credential URL redaction.
+5. **Comprehensive Automated & E2E Testing**: Added 11 Phase 5 tests (`tests/phase5.test.ts`) bringing the total suite to 65 passing tests. Executed `scratch/phase5_e2e.ts` verifying real Discord webhook publication, mid-batch crash simulation, worker restart recovery, and zero duplicate publication.

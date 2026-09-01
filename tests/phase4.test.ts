@@ -64,7 +64,7 @@ describe('Phase 4 — Publishing Adapters & Idempotent Publishing', () => {
   let sampleSlotId: string;
 
   beforeEach(async () => {
-    postRepository.clearAll();
+    await postRepository.clearAll();
 
     const post = await postRepository.createPost({
       sourceType: 'markdown',

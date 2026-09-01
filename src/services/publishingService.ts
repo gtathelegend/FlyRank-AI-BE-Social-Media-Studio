@@ -164,6 +164,40 @@ export class PublishingService {
   public async getPublishAttemptById(attemptId: string): Promise<PublishAttempt | null> {
     return postRepository.getPublishAttemptById(attemptId);
   }
+
+  public async getPublishHistory(): Promise<any[]> {
+    const attempts = await postRepository.getAllPublishAttempts();
+    const history = [];
+
+    for (const attempt of attempts) {
+      const variant = await postRepository.getVariantById(attempt.variant_id);
+      const slot = await postRepository.getSlotById(attempt.slot_id);
+      const job = await postRepository.getScheduledJobBySlotId(attempt.slot_id);
+
+      const cleanErrorInfo = attempt.error_info ? JSON.parse(JSON.stringify(attempt.error_info)) : null;
+      if (cleanErrorInfo && typeof cleanErrorInfo.message === 'string') {
+        cleanErrorInfo.message = cleanErrorInfo.message.replace(/https?:\/\/[^\s]+/g, '[REDACTED_URL]');
+      }
+
+      history.push({
+        attemptId: attempt.id,
+        variantId: attempt.variant_id,
+        slotId: attempt.slot_id,
+        platform: variant?.platform || 'unknown',
+        status: attempt.status,
+        idempotencyKey: attempt.idempotency_key,
+        scheduledAt: slot?.scheduled_at || null,
+        attemptedAt: attempt.attempted_at,
+        completedAt: attempt.completed_at || null,
+        externalPostId: attempt.external_post_id || null,
+        errorInfo: cleanErrorInfo,
+        retryCount: job?.attempts || 0,
+        jobStatus: job?.status || null
+      });
+    }
+
+    return history;
+  }
 }
 
 export const publishingService = new PublishingService();

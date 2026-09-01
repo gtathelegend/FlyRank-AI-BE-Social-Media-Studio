@@ -61,8 +61,8 @@ function makeRequest(
 }
 
 describe('Phase 2 — Content Ingestion & Variant Generation', () => {
-  beforeEach(() => {
-    postRepository.clearAll();
+  beforeEach(async () => {
+    await postRepository.clearAll();
   });
 
   describe('1. Post Ingestion (POST /posts)', () => {

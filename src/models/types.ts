@@ -8,6 +8,8 @@ export type SlotStatus = 'scheduled' | 'cancelled' | 'completed';
 
 export type PublishAttemptStatus = 'pending' | 'success' | 'failed';
 
+export type JobStatus = 'pending' | 'processing' | 'published' | 'failed';
+
 export interface Post {
   id: string;
   source_type: SourceType;
@@ -59,6 +61,22 @@ export interface PublishAttempt {
   external_post_id?: string | null;
   error_info?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
+}
+
+export interface ScheduledJob {
+  id: string;
+  variant_id: string;
+  slot_id: string;
+  scheduled_at: Date;
+  status: JobStatus;
+  attempts: number;
+  max_attempts: number;
+  claimed_at?: Date | null;
+  available_at: Date;
+  last_error?: Record<string, unknown> | null;
+  published_at?: Date | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface VariantAuditLog {

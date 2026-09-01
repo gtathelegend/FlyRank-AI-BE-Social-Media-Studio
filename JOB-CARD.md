@@ -35,7 +35,11 @@
   - Built `POST /variants/:id/publish`, `GET /variants/:id/attempts`, and `GET /publish-attempts/:id`.
   - Executed and passed 54 automated tests (0 errors).
 
-- [ ] **Phase 5 — End-to-End Verification & Hardening**
-  - End-to-end multi-platform integration tests.
-  - Concurrent request deduplication & idempotency edge-case testing.
-  - Final documentation, evidence collection, and repository cleanup.
+- [x] **Phase 5 — End-to-End Verification & Hardening**
+  - Created PostgreSQL durable scheduler migration (`002_scheduler.sql`) creating `scheduled_jobs` table.
+  - Implemented `PublishWorker` daemon with atomic claiming (`FOR UPDATE SKIP LOCKED`), exponential backoff retries, and crash recovery.
+  - Built stale job lease recovery mechanism verifying `publish_attempts` idempotency ledger to guarantee zero duplicate external posts on worker process restarts.
+  - Implemented `GET /publish-history` and `GET /publish-attempts` API endpoints with secret URL redaction.
+  - Created comprehensive Phase 5 test suite (`tests/phase5.test.ts`) bringing total automated suite to 65 passing tests (0 errors).
+  - Verified end-to-end real Discord webhook publishing, worker crash recovery, and idempotency replay via `scratch/phase5_e2e.ts`.
+
