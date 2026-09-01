@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { postController } from '../controllers/postController.js';
 import { approvalController } from '../controllers/approvalController.js';
+import { publishingController } from '../controllers/publishingController.js';
 
 export const postRouter = Router();
 
@@ -16,3 +17,8 @@ postRouter.post('/variants/:id/reject', approvalController.rejectVariant);
 postRouter.put('/variants/:id', approvalController.editVariant);
 postRouter.post('/variants/:id/schedule', approvalController.scheduleVariant);
 postRouter.get('/variants/:id/history', approvalController.getVariantHistory);
+
+// Phase 4: Publishing & Idempotency Ledger
+postRouter.post('/variants/:id/publish', publishingController.publishVariant);
+postRouter.get('/variants/:id/attempts', publishingController.getVariantPublishAttempts);
+postRouter.get('/publish-attempts/:id', publishingController.getPublishAttemptById);

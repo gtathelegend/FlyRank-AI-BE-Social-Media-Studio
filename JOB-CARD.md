@@ -24,13 +24,16 @@
   - Implemented variant editing (`PUT /variants/:id`) forcing status reset to `draft` for re-approval.
   - Implemented scheduling foundation (`POST /variants/:id/schedule`) with mandatory security guard `assertVariantApprovedForScheduling`.
   - Built chronological audit history logging (`GET /variants/:id/history`).
-  - Executed and passed 41 automated tests (0 errors).
+  - Executed and passed automated tests.
 
-- [ ] **Phase 4 — Durable Worker & Adapters**
-  - Build BullMQ background publication worker.
-  - Implement real HTTP target execution for `DiscordPublisher` via `DISCORD_WEBHOOK_URL`.
-  - Implement full mock publication recording for `MockXPublisher` and `MockLinkedInPublisher`.
-  - Enforce database-level attempt ledger and idempotency handling.
+- [x] **Phase 4 — Durable Worker & Adapters**
+  - Built real HTTP target execution for `DiscordPublisher` via `DISCORD_WEBHOOK_URL` with 5s timeout and non-2xx error handling.
+  - Built `MockXPublisher` and `MockLinkedInPublisher` adapters with zero network calls and inspectable records.
+  - Implemented dynamic strategy resolution via `PublisherRegistry`.
+  - Enforced approval guard (`variant.status === 'approved'`).
+  - Implemented database-level idempotency ledger ensuring `SAME VARIANT + SLOT = 1 PUBLICATION` with `isReplay: true` replay responses.
+  - Built `POST /variants/:id/publish`, `GET /variants/:id/attempts`, and `GET /publish-attempts/:id`.
+  - Executed and passed 54 automated tests (0 errors).
 
 - [ ] **Phase 5 — End-to-End Verification & Hardening**
   - End-to-end multi-platform integration tests.

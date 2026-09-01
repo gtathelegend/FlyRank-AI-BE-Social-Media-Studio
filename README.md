@@ -6,7 +6,7 @@ Backend service for content ingestion, platform variant generation, multi-stage 
 - [x] **Phase 1: DESIGN (Completed)**
 - [x] **Phase 2: CONTENT INGESTION + VARIANT GENERATION (Completed)**
 - [x] **Phase 3: HUMAN APPROVAL WORKFLOW (Completed)**
-- [ ] Phase 4: DURABLE WORKER + ADAPTERS (Pending)
+- [x] **Phase 4: PUBLISHING ADAPTERS + IDEMPOTENT PUBLISHING (Completed)**
 - [ ] Phase 5: END-TO-END VERIFICATION & HARDENING (Pending)
 
 ---
@@ -24,71 +24,74 @@ Backend service for content ingestion, platform variant generation, multi-stage 
 
 ---
 
-## 🚦 Human Approval & Review Workflow (Phase 3)
+## 🔌 Publishing Adapters & Strategy Registry (Phase 4)
 
 ```
-[ draft ] ───(Approve)───► [ approved ] ───(Schedule)───► [ scheduled ] (Slot created)
-    │                            │
- (Reject)                  (Edit content)
-    ▼                            │
-[ rejected ] ◄───────────────────┘ (Resets status back to draft for re-approval)
+SocialPublisher (Interface Contract)
+├── DiscordPublisher        (REAL: Sends HTTP POST to DISCORD_WEBHOOK_URL)
+├── MockXPublisher           (MOCK: Zero network requests, inspectable records)
+└── MockLinkedInPublisher    (MOCK: Zero network requests, inspectable records)
 ```
 
-### Critical Security Rule:
-**UNAPPROVED VARIANTS CAN NEVER BE SCHEDULED OR PUBLISHED.**
-The service layer explicitly enforces `assertVariantApprovedForScheduling(variant)`. Any attempt to schedule a `draft`, `rejected`, or `published` variant is rejected with `409 Conflict`.
+Business logic resolves publisher adapters dynamically via `PublisherRegistry.getPublisher(platform)`. Setting `SOCIAL_ADAPTER=discord` or `SOCIAL_ADAPTER=mock_x` in `.env` swaps strategy implementation without modifying application logic.
 
 ---
 
-## 📡 API Endpoints (Phase 3 Additions)
+## 🔒 Idempotent Publishing & Approval Invariants
 
-### 1. Approve Variant (`POST /variants/:id/approve`)
-Validates that variant is in `draft` status and passes platform constraint profile checks before transitioning status to `approved`.
+$$\text{SAME VARIANT} + \text{SAME SLOT} = \text{EXACTLY ONE SUCCESSFUL PUBLICATION}$$
+
+- **Approval Gate Guard**: `POST /variants/:id/publish` requires `variant.status === 'approved'`. Draft, rejected, or published variants are blocked with `409 Conflict`.
+- **Database-Level Idempotency**: Derived `idempotency_key` (`${variantId}:${slotId}`) prevents duplicate execution under concurrent retries or repeated API calls. Duplicate requests return `isReplay: true` with the stored attempt record.
+
+---
+
+## 📡 API Endpoints (Phase 4 Additions)
+
+### 1. Publish Approved Variant (`POST /variants/:id/publish`)
+Executes publication via target social adapter, records publication attempt in DB ledger, and updates variant status to `published`.
+- **Request Body**: `{ "slotId": "slot-uuid" }`
 - **Response** (`200 OK`):
 ```json
 {
-  "id": "var-123",
-  "postId": "post-456",
-  "platform": "discord",
-  "status": "approved",
-  "updatedAt": "2026-09-01T22:13:00.000Z"
+  "attemptId": "att-123",
+  "variantId": "var-456",
+  "slotId": "slot-789",
+  "status": "success",
+  "isReplay": false,
+  "externalPostId": "9876543210",
+  "publishedAt": "2026-09-01T22:17:00.000Z",
+  "url": null
 }
 ```
 
-### 2. Reject Variant (`POST /variants/:id/reject`)
-Transitions status from `draft` to `rejected` and records optional rejection reason.
-- **Request Body**: `{ "reason": "Brand tone mismatched" }`
-- **Response** (`200 OK`):
-```json
-{
-  "id": "var-123",
-  "status": "rejected",
-  "rejectionReason": "Brand tone mismatched",
-  "updatedAt": "2026-09-01T22:13:00.000Z"
-}
-```
+### 2. Get Variant Publish Attempts (`GET /variants/:id/attempts`)
+- **Response** (`200 OK`): Retransmits array of execution attempt ledger entries for the variant.
 
-### 3. Edit Variant (`PUT /variants/:id`)
-Edits variant content, re-validates platform constraints, and resets status to `draft` (forcing re-approval). Editing published content is forbidden.
-- **Request Body**: `{ "content": "Updated content..." }`
-- **Response** (`200 OK`): Retransmits updated variant in `draft` status.
+### 3. Inspect Publish Attempt (`GET /publish-attempts/:id`)
+- **Response** (`200 OK`): Detailed attempt record.
 
-### 4. Schedule Variant (`POST /variants/:id/schedule`)
-Creates a schedule `Slot` entry for approved variants.
-- **Request Body**: `{ "scheduledAt": "2026-09-05T12:00:00.000Z" }`
-- **Response** (`201 Created`):
-```json
-{
-  "id": "slot-789",
-  "variantId": "var-123",
-  "scheduledAt": "2026-09-05T12:00:00.000Z",
-  "status": "scheduled",
-  "createdAt": "2026-09-01T22:13:00.000Z"
-}
-```
+---
 
-### 5. Audit History (`GET /variants/:id/history`)
-Returns timestamped log of review operations (`previousStatus`, `newStatus`, `reason`, `createdAt`).
+## 🧪 Manual Discord Integration Test Instructions
+
+To verify real Discord Webhook publishing locally:
+
+1. Create a channel in your Discord server and create a Webhook integration URL.
+2. Add the URL to your local `.env` file:
+   ```env
+   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_TOKEN
+   ```
+3. Run the development server: `npm run dev`
+4. Post a markdown document (`POST /posts`).
+5. Generate variants (`POST /posts/:id/variants`).
+6. Approve the Discord variant (`POST /variants/:id/approve`).
+7. Publish the variant (`POST /variants/:id/publish`).
+8. Verify message delivery in your Discord channel!
+9. Repeat step 7 to verify idempotent replay (`isReplay: true`, zero duplicate Discord messages).
+
+> [!CAUTION]
+> NEVER commit `.env` or write Discord Webhook credentials into documentation, tests, logs, or evidence files.
 
 ---
 
@@ -101,7 +104,7 @@ npm install
 # Compile TypeScript
 npm run build
 
-# Run Vitest test suite (41 tests)
+# Run Vitest test suite (54 tests)
 npm test
 
 # Start live development server

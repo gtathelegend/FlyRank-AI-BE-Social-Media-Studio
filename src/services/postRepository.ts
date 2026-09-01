@@ -2,10 +2,12 @@ import {
   Post,
   Variant,
   Slot,
+  PublishAttempt,
   VariantAuditLog,
   SourceType,
   PlatformType,
   VariantStatus,
+  PublishAttemptStatus,
   ValidationInfo
 } from '../models/types.js';
 import crypto from 'crypto';
@@ -25,10 +27,19 @@ export interface CreateVariantDTO {
   validationInfo: ValidationInfo;
 }
 
+export interface CreatePublishAttemptDTO {
+  variantId: string;
+  slotId: string;
+  idempotencyKey: string;
+  status?: PublishAttemptStatus;
+  metadata?: Record<string, unknown>;
+}
+
 export class PostRepository {
   private postsMap = new Map<string, Post>();
   private variantsMap = new Map<string, Variant>();
   private slotsMap = new Map<string, Slot>();
+  private attemptsMap = new Map<string, PublishAttempt>();
   private auditLogsMap = new Map<string, VariantAuditLog[]>();
 
   public async createPost(dto: CreatePostDTO): Promise<Post> {
@@ -118,6 +129,88 @@ export class PostRepository {
     return this.slotsMap.get(id) || null;
   }
 
+  public async getSlotsByVariantId(variantId: string): Promise<Slot[]> {
+    const results: Slot[] = [];
+    for (const slot of this.slotsMap.values()) {
+      if (slot.variant_id === variantId) {
+        results.push(slot);
+      }
+    }
+    return results;
+  }
+
+  // Publish Attempts Data Access (Idempotency ledger)
+  public async createPublishAttempt(dto: CreatePublishAttemptDTO): Promise<PublishAttempt> {
+    // Unique invariant check: SAME VARIANT + SAME SLOT or SAME IDEMPOTENCY KEY
+    const existing = await this.getPublishAttemptByIdempotencyKey(dto.idempotencyKey);
+    if (existing) {
+      return existing;
+    }
+
+    const attempt: PublishAttempt = {
+      id: crypto.randomUUID(),
+      variant_id: dto.variantId,
+      slot_id: dto.slotId,
+      idempotency_key: dto.idempotencyKey,
+      status: dto.status || 'pending',
+      attempted_at: new Date(),
+      completed_at: null,
+      external_post_id: null,
+      error_info: null,
+      metadata: dto.metadata || null
+    };
+
+    this.attemptsMap.set(attempt.id, attempt);
+    return attempt;
+  }
+
+  public async getPublishAttemptById(id: string): Promise<PublishAttempt | null> {
+    return this.attemptsMap.get(id) || null;
+  }
+
+  public async getPublishAttemptByIdempotencyKey(key: string): Promise<PublishAttempt | null> {
+    for (const attempt of this.attemptsMap.values()) {
+      if (attempt.idempotency_key === key) {
+        return attempt;
+      }
+    }
+    return null;
+  }
+
+  public async getPublishAttemptByVariantAndSlot(variantId: string, slotId: string): Promise<PublishAttempt | null> {
+    for (const attempt of this.attemptsMap.values()) {
+      if (attempt.variant_id === variantId && attempt.slot_id === slotId) {
+        return attempt;
+      }
+    }
+    return null;
+  }
+
+  public async updatePublishAttempt(id: string, updates: Partial<PublishAttempt>): Promise<PublishAttempt> {
+    const attempt = this.attemptsMap.get(id);
+    if (!attempt) {
+      throw new Error(`Publish attempt not found: ${id}`);
+    }
+
+    const updated: PublishAttempt = {
+      ...attempt,
+      ...updates
+    };
+
+    this.attemptsMap.set(id, updated);
+    return updated;
+  }
+
+  public async getPublishAttemptsByVariantId(variantId: string): Promise<PublishAttempt[]> {
+    const results: PublishAttempt[] = [];
+    for (const attempt of this.attemptsMap.values()) {
+      if (attempt.variant_id === variantId) {
+        results.push(attempt);
+      }
+    }
+    return results;
+  }
+
   public async createAuditLog(
     variantId: string,
     previousStatus: VariantStatus,
@@ -147,6 +240,7 @@ export class PostRepository {
     this.postsMap.clear();
     this.variantsMap.clear();
     this.slotsMap.clear();
+    this.attemptsMap.clear();
     this.auditLogsMap.clear();
   }
 }
