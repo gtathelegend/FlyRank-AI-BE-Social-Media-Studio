@@ -8,8 +8,9 @@ Social Media Studio is a backend service designed to ingest blog post content (U
 flowchart TD
     Client[Client Application / REST API] --> API[Express API Server]
     API --> DB[(PostgreSQL Database)]
-    API --> Queue[BullMQ / Redis Scheduler]
-    Queue --> Worker[Publication Background Worker]
+    DB --> Jobs[(scheduled_jobs Table)]
+    Worker[PublishWorker Background Daemon] --> Jobs
+    Worker -->|Atomically Claims FOR UPDATE SKIP LOCKED| Jobs
     Worker --> Registry[Publisher Registry]
     Registry --> Discord[Discord Webhook Adapter (REAL Target)]
     Registry --> MockX[Mock X Adapter (MOCK)]

@@ -1,22 +1,100 @@
-# Phase 5 Acceptance Evidence & Capstone Final Summary
+# Verification Evidence — Social Media Studio
 
-## Phase 5 Verification Summary
-
-| Component / Requirement | Diagnostic Finding & Resolution | Status |
-| :--- | :--- | :--- |
-| **Durable Scheduler Job Store** | Created `002_scheduler.sql` PostgreSQL schema migration with `scheduled_jobs` table and indexes. Auto-applies on server start. | **PASS** |
-| **Scheduling API Security** | `POST /variants/:id/schedule` enforces `assertVariantApprovedForScheduling`. Rejects unapproved variants with 409 Conflict. | **PASS** |
-| **Atomic Worker Claiming** | `PublishWorker` uses `FOR UPDATE SKIP LOCKED` on PostgreSQL (and memory fallback) to prevent double-claiming across workers. | **PASS** |
-| **Worker Crash Recovery** | `recoverStaleJobs` reclaims jobs stuck in `processing` past `PROCESSING_LEASE_SECONDS`. Cross-references `publish_attempts` ledger to avoid duplicate posts. | **PASS** |
-| **Idempotency Guarantee** | Worker restart re-uses Phase 4 idempotency ledger (`SAME VARIANT + SLOT = 1 PUBLICATION`). Zero duplicate webhook calls on worker restart. | **PASS** |
-| **Exponential Backoff Retries** | Retries transient errors with exponential backoff; permanently fails invalid state / max attempt errors. | **PASS** |
-| **Publish History API** | Implemented `GET /publish-history` and `GET /publish-attempts` returning structured attempt history sorted newest first with credential redaction. | **PASS** |
-| **Automated Test Suite** | 65 automated Vitest unit & integration tests passing across all 5 phases (0 errors). | **PASS** |
+Evaluator-oriented test results, execution logs, crash recovery verification, and security audit details.
 
 ---
 
-## Phase 5 E2E Real Discord & Worker Crash Recovery Proof
+## 1. Environment
 
+- **OS**: Windows 11
+- **Node.js**: v22.13.0
+- **TypeScript**: v5.8.2
+- **Database**: PostgreSQL 16 (`social_studio` database on localhost:5432)
+- **Target Platform**: Real Discord Webhook & Mock X / Mock LinkedIn Adapters
+
+---
+
+## 2. Build Verification
+
+Command: `npm run build`
+```
+> flyrank-capstone-social-studio@1.0.0 build
+> tsc
+```
+Result: **PASS** (0 compilation errors).
+
+---
+
+## 3. Automated Test Suite Summary
+
+Command: `npm test`
+```
+ RUN  v3.2.7 D:/Vedaang/Internship/FlyRank AI/Social Media Studio/FlyRank-AI-BE-Social-Media Studio
+
+ ✓ tests/phase1.test.ts (6 tests)
+ ✓ tests/phase5.test.ts (11 tests)
+ ✓ tests/phase2.test.ts (17 tests)
+ ✓ tests/phase3.test.ts (18 tests)
+ ✓ tests/phase4.test.ts (13 tests)
+
+ Test Files  5 passed (5)
+      Tests  65 passed (65)
+   Duration  5.96s
+```
+Result: **65 / 65 Tests Passed** (0 Failures, 0 Errors).
+
+---
+
+## 4. Phase 1 Evidence — Design & Strategy Registry
+
+- Platform constraint profiles configured (`discord`, `mock_x`, `mock_linkedin`).
+- Interface `SocialPublisher` decoupled from domain code.
+- Strategy pattern registry (`PublisherRegistry`) successfully resolves publisher implementations dynamically.
+- `tests/phase1.test.ts` (6/6 passed).
+
+---
+
+## 5. Phase 2 Evidence — Content Ingestion & Variant Generation
+
+- `POST /posts` accepts Markdown and URL input.
+- SSRF protection validator (`src/services/ssrfProtection.ts`) rejects loopback (`127.0.0.1`), private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), and non-HTTP schemes.
+- `POST /posts/:id/variants` generates platform draft variants.
+- `tests/phase2.test.ts` (17/17 passed).
+
+---
+
+## 6. Phase 3 Evidence — Human Approval & Scheduling Security
+
+- Human review endpoints (`approve`, `reject`, `edit`).
+- Editing content forces status reset back to `draft`.
+- Scheduling guard `assertVariantApprovedForScheduling` blocks draft, rejected, or published variants with HTTP 409 Conflict.
+- `tests/phase3.test.ts` (18/18 passed).
+
+---
+
+## 7. Phase 4 Evidence — Publishing Adapters & Idempotency Ledger
+
+- `DiscordPublisher` executes real HTTP POST requests with 5s timeout and error handling.
+- `MockXPublisher` & `MockLinkedInPublisher` perform zero network requests.
+- Database idempotency ledger enforcing `UNIQUE(variant_id, slot_id)`.
+- Replay requests return `isReplay: true` without duplicate external webhook delivery.
+- `tests/phase4.test.ts` (13/13 passed).
+
+---
+
+## 8. Phase 5 Evidence — Durable Scheduler, Worker & Publish History
+
+- PostgreSQL migration `002_scheduler.sql` creating `scheduled_jobs` table.
+- `PublishWorker` daemon implementing atomic claiming (`FOR UPDATE SKIP LOCKED`).
+- Exponential backoff retry handling for transient errors.
+- `GET /publish-history` returning combined attempts sorted newest first with credential redaction.
+- `tests/phase5.test.ts` (11/11 passed).
+
+---
+
+## 9. Real Discord E2E Verification Log
+
+Command: `npx tsx scratch/phase5_e2e.ts`
 ```
 --- STARTING PHASE 5 SCHEDULER & WORKER E2E VERIFICATION ---
 [Database] Connected to PostgreSQL at localhost:5432/social_studio
@@ -74,18 +152,40 @@
 
 ---
 
-## Automated Test Suite Final Results (65 / 65 Passed)
+## 10. Crash Recovery Verification
 
-```
- RUN  v3.2.7 D:/Vedaang/Internship/FlyRank AI/Social Media Studio/FlyRank-AI-BE-Social-Media Studio
+- Stale jobs in `processing` state claimed over 60 seconds ago are reclaimed by `recoverStaleJobs()`.
+- Idempotency ledger (`publish_attempts`) is checked during recovery.
+- External Post ID remains unchanged (`1544395629776609321`).
+- Total Publish Attempts Count remains `1`.
+- **Zero duplicate external publications occurred.**
 
- ✓ tests/phase1.test.ts (6 tests)
- ✓ tests/phase5.test.ts (11 tests)
- ✓ tests/phase2.test.ts (17 tests)
- ✓ tests/phase3.test.ts (18 tests)
- ✓ tests/phase4.test.ts (13 tests)
+---
 
- Test Files  5 passed (5)
-      Tests  65 passed (65)
-   Duration  6.03s
-```
+## 11. Idempotency Verification
+
+- Replay publish requests return `isReplay: true` with the stored attempt record.
+- Database constraint `uq_publish_attempts_variant_slot` enforces single publication per slot at the database layer.
+
+---
+
+## 12. Security Audit
+
+- `.env` file is gitignored.
+- Webhook credentials exist only in environment variables.
+- Internal stack traces and credential URLs are sanitized from history responses.
+- SSRF validator protects internal network infrastructure.
+- Approval security guard prevents publishing unapproved content.
+
+---
+
+## 13. Final Status
+
+| Metric / Check | Value / Status |
+| :--- | :--- |
+| **Total Automated Tests** | 65 / 65 Passed |
+| **TypeScript Build** | 0 Compilation Errors |
+| **Database Migrations** | Applied (`001_initial_schema.sql`, `002_scheduler.sql`) |
+| **Real Discord Webhook Delivery** | Verified (`externalPostId: 1544395629776609321`) |
+| **Worker Crash Recovery** | Verified (0 duplicate posts) |
+| **Git Working Tree** | Clean |
