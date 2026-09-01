@@ -16,13 +16,15 @@
   - Built canonical post repository ensuring stored DB post is single source of truth.
   - Built `POST /posts/:id/variants` generating platform-adapted draft variants.
   - Implemented constraint validation service (`maxLength`, `tone`, `maxHashtags`) against `platformConstraints.ts`.
-  - Executed and passed 23 automated tests (0 errors).
+  - Executed and passed automated tests.
 
-- [ ] **Phase 3 — Review Workflow & Scheduling**
-  - Implement variant approval/rejection endpoints (`POST /variants/:id/approve`, `POST /variants/:id/reject`).
-  - Implement variant editing (`PUT /variants/:id`).
-  - Implement variant scheduling (`POST /variants/:id/schedule`) enforcing unapproved variant guard.
-  - Connect BullMQ queue for delayed publication jobs.
+- [x] **Phase 3 — Review Workflow & Scheduling**
+  - Implemented variant approval endpoint (`POST /variants/:id/approve`) validating constraints before approving.
+  - Implemented variant rejection endpoint (`POST /variants/:id/reject`) persisting rejection reasons.
+  - Implemented variant editing (`PUT /variants/:id`) forcing status reset to `draft` for re-approval.
+  - Implemented scheduling foundation (`POST /variants/:id/schedule`) with mandatory security guard `assertVariantApprovedForScheduling`.
+  - Built chronological audit history logging (`GET /variants/:id/history`).
+  - Executed and passed 41 automated tests (0 errors).
 
 - [ ] **Phase 4 — Durable Worker & Adapters**
   - Build BullMQ background publication worker.

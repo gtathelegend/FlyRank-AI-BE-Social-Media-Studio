@@ -34,6 +34,7 @@ export interface Variant {
   content: string;
   status: VariantStatus;
   validation_info: ValidationInfo;
+  rejection_reason?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -60,6 +61,24 @@ export interface PublishAttempt {
   metadata?: Record<string, unknown> | null;
 }
 
+export interface VariantAuditLog {
+  id: string;
+  variant_id: string;
+  previous_status: VariantStatus;
+  new_status: VariantStatus;
+  reason?: string | null;
+  created_at: Date;
+}
+
+export class InvalidStateTransitionError extends Error {
+  public statusCode: number;
+  constructor(message: string, statusCode: number = 409) {
+    super(message);
+    this.name = 'InvalidStateTransitionError';
+    this.statusCode = statusCode;
+  }
+}
+
 /**
  * Validates allowed variant state transitions.
  * Allowed:
@@ -76,4 +95,17 @@ export function isValidVariantStateTransition(current: VariantStatus, next: Vari
   };
 
   return allowedTransitions[current]?.includes(next) ?? false;
+}
+
+/**
+ * Service-level security assertion making it impossible to schedule unapproved variants.
+ * Rejects draft, rejected, or published variants with an InvalidStateTransitionError.
+ */
+export function assertVariantApprovedForScheduling(variant: Variant): void {
+  if (variant.status !== 'approved') {
+    throw new InvalidStateTransitionError(
+      `Variant ${variant.id} cannot be scheduled because its status is '${variant.status}'. Only 'approved' variants may be scheduled.`,
+      409
+    );
+  }
 }

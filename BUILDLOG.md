@@ -1,30 +1,32 @@
 # Build Log — Social Media Studio
 
 ## Phase 1 — Design Phase (2026-09-01)
-- Initialized technical architecture, data model, strategy pattern publisher adapters, Zod schemas, platform constraint profiles, and base Vitest test suite.
+- Initialized technical architecture, database schema, publisher adapter strategy registry, and Phase 1 test suite.
 
 ---
 
 ## Phase 2 — Content Ingestion + Variant Generation (2026-09-01)
+- Implemented `POST /posts` (Markdown/URL ingestion with SSRF protection) and `POST /posts/:id/variants` generating platform-specific draft variants validated against platform constraint profiles.
+
+---
+
+## Phase 3 — Human Approval Workflow (2026-09-01)
 
 ### AI Assistance Disclosure
-Phase 2 content pipeline, SSRF security guard, database repositories, constraint validator, and variant generator were implemented and verified using AI pair-programming (Antigravity AI Agent).
+Phase 3 human review gate, state transition guards, scheduling assertions, variant editor, audit logger, and Phase 3 automated test suite were designed and implemented using AI pair-programming (Antigravity AI Agent).
 
 ### Chronological Implementation Steps
-1. **SSRF Guard & Security (`src/services/ssrfGuard.ts`)**:
-   - Implemented `validateUrlForSsrf` enforcing protocol restriction (`http/https`), hostname blacklist (`localhost`, `.local`, `.internal`, `.lan`), and IP range blacklist (loopback, 10.x, 172.16-31.x, 192.168.x, 169.254.x, IPv6 `::1`).
-2. **URL Ingestion Service (`src/services/urlIngestionService.ts`)**:
-   - Built HTML scraper with 5000ms request timeout and 2MB payload size limit.
-   - Extracted title and sanitized text content.
-3. **Repository Layer (`src/services/postRepository.ts`)**:
-   - Created database data access layer for canonical post storage and variant persistence.
-4. **Constraint Validator (`src/services/constraintValidator.ts`)**:
-   - Built reusable validation service validating max length, hashtag count, and non-empty content against `platformConstraints.ts`.
-5. **Variant Generator (`src/services/variantGenerator.ts`)**:
-   - Built deterministic platform-specific formatter generating `draft` status variants for `discord`, `mock_x`, and `mock_linkedin`.
-6. **Controllers & Endpoints**:
-   - Built `PostController` (`POST /posts`, `GET /posts/:id`, `POST /posts/:id/variants`, `GET /variants/:id`).
-   - Wired `postRouter` into Express app.
-7. **Automated Testing & Verification**:
-   - Created `tests/phase2.test.ts` with 17 unit/integration tests covering ingestion, SSRF protection, post retrieval, variant generation, and constraint validation.
-   - Executed `npm run build` (0 TypeScript errors) and `npm test` (23/23 tests passed).
+1. **Domain Model & Guard Extensions (`src/models/types.ts`)**:
+   - Added `rejection_reason` to `Variant` model.
+   - Defined `VariantAuditLog` and `InvalidStateTransitionError` (HTTP 409).
+   - Created security assertion function `assertVariantApprovedForScheduling(variant)` blocking unapproved variants from scheduling.
+2. **Repository Expansion (`src/services/postRepository.ts`)**:
+   - Implemented `updateVariant`, `createSlot`, `createAuditLog`, and `getVariantAuditLogs`.
+3. **Approval Business Service (`src/services/approvalService.ts`)**:
+   - Built `approveVariant` (validates constraints before approval), `rejectVariant` (stores optional reason), `editVariant` (forces status reset to `draft` on edit), and `scheduleVariant` (enforces `approved` status guard).
+4. **Validation Schemas & Controller (`src/controllers/approvalController.ts`)**:
+   - Built Zod validation schemas for reject, edit, and schedule payloads.
+   - Built controller handlers and mapped routes in `src/routes/postRoutes.ts`.
+5. **Automated Testing & Verification**:
+   - Created `tests/phase3.test.ts` with 18 unit and API integration tests covering approval, rejection, editing, scheduling security boundary, and audit logging.
+   - Executed `npm run build` (0 TypeScript errors) and `npm test` (41/41 tests passed).

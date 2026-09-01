@@ -1,11 +1,11 @@
 # FlyRank Social Media Studio
 
-Backend service for content ingestion, platform variant generation, multi-stage approval workflow, durable scheduling, and multi-platform publishing.
+Backend service for content ingestion, platform variant generation, multi-stage human review workflow, durable scheduling, and multi-platform publishing.
 
 ## 🚀 Status
 - [x] **Phase 1: DESIGN (Completed)**
 - [x] **Phase 2: CONTENT INGESTION + VARIANT GENERATION (Completed)**
-- [ ] Phase 3: REVIEW WORKFLOW + SCHEDULING (Pending)
+- [x] **Phase 3: HUMAN APPROVAL WORKFLOW (Completed)**
 - [ ] Phase 4: DURABLE WORKER + ADAPTERS (Pending)
 - [ ] Phase 5: END-TO-END VERIFICATION & HARDENING (Pending)
 
@@ -24,111 +24,86 @@ Backend service for content ingestion, platform variant generation, multi-stage 
 
 ---
 
-## 🏗️ Content Pipeline (Phase 2)
+## 🚦 Human Approval & Review Workflow (Phase 3)
 
 ```
-URL / Markdown
-    ↓
-POST /posts (SSRF validation + Ingestion)
-    ↓
-Persist Canonical Source Post in DB
-    ↓
-POST /posts/:id/variants (Read from DB)
-    ↓
-Generate Platform-Specific Variants (Discord, Mock X, Mock LinkedIn)
-    ↓
-Validate Platform Constraint Profiles (Length, Tone, Hashtags)
-    ↓
-Persist Valid Draft Variants in DB
+[ draft ] ───(Approve)───► [ approved ] ───(Schedule)───► [ scheduled ] (Slot created)
+    │                            │
+ (Reject)                  (Edit content)
+    ▼                            │
+[ rejected ] ◄───────────────────┘ (Resets status back to draft for re-approval)
 ```
+
+### Critical Security Rule:
+**UNAPPROVED VARIANTS CAN NEVER BE SCHEDULED OR PUBLISHED.**
+The service layer explicitly enforces `assertVariantApprovedForScheduling(variant)`. Any attempt to schedule a `draft`, `rejected`, or `published` variant is rejected with `409 Conflict`.
 
 ---
 
-## 📡 API Surface (Phase 2 Endpoints)
+## 📡 API Endpoints (Phase 3 Additions)
 
-### 1. Ingest Content (`POST /posts`)
-- **Markdown Request**:
+### 1. Approve Variant (`POST /variants/:id/approve`)
+Validates that variant is in `draft` status and passes platform constraint profile checks before transitioning status to `approved`.
+- **Response** (`200 OK`):
 ```json
 {
-  "sourceType": "markdown",
-  "content": "# Article Title\n\nArticle body content...",
-  "title": "Article Title"
+  "id": "var-123",
+  "postId": "post-456",
+  "platform": "discord",
+  "status": "approved",
+  "updatedAt": "2026-09-01T22:13:00.000Z"
 }
 ```
-- **URL Request**:
+
+### 2. Reject Variant (`POST /variants/:id/reject`)
+Transitions status from `draft` to `rejected` and records optional rejection reason.
+- **Request Body**: `{ "reason": "Brand tone mismatched" }`
+- **Response** (`200 OK`):
 ```json
 {
-  "sourceType": "url",
-  "url": "https://example.com/blog/post"
+  "id": "var-123",
+  "status": "rejected",
+  "rejectionReason": "Brand tone mismatched",
+  "updatedAt": "2026-09-01T22:13:00.000Z"
 }
 ```
+
+### 3. Edit Variant (`PUT /variants/:id`)
+Edits variant content, re-validates platform constraints, and resets status to `draft` (forcing re-approval). Editing published content is forbidden.
+- **Request Body**: `{ "content": "Updated content..." }`
+- **Response** (`200 OK`): Retransmits updated variant in `draft` status.
+
+### 4. Schedule Variant (`POST /variants/:id/schedule`)
+Creates a schedule `Slot` entry for approved variants.
+- **Request Body**: `{ "scheduledAt": "2026-09-05T12:00:00.000Z" }`
 - **Response** (`201 Created`):
 ```json
 {
-  "id": "123e4567-e89b-12d3-a456-426614174000",
-  "sourceType": "markdown",
-  "sourceUrl": null,
-  "title": "Article Title",
-  "sourceContent": "# Article Title...",
-  "createdAt": "2026-09-01T22:10:00.000Z"
+  "id": "slot-789",
+  "variantId": "var-123",
+  "scheduledAt": "2026-09-05T12:00:00.000Z",
+  "status": "scheduled",
+  "createdAt": "2026-09-01T22:13:00.000Z"
 }
 ```
 
-### 2. Get Stored Post (`GET /posts/:id`)
-- **Response** (`200 OK`): Retransmits stored canonical post.
-
-### 3. Generate Variants (`POST /posts/:id/variants`)
-- **Response** (`201 Created`):
-```json
-{
-  "postId": "123e4567-e89b-12d3-a456-426614174000",
-  "variants": [
-    {
-      "id": "var-111",
-      "postId": "123e4567-e89b-12d3-a456-426614174000",
-      "platform": "discord",
-      "content": "📢 **Article Title**\n\nArticle body...",
-      "status": "draft",
-      "validationInfo": {
-        "isValid": true,
-        "length": 150,
-        "maxLength": 2000,
-        "hashtagCount": 3,
-        "maxHashtags": 3,
-        "errors": []
-      }
-    }
-  ]
-}
-```
-
-### 4. Get Variant (`GET /variants/:id`)
-- **Response** (`200 OK`): Single variant record.
+### 5. Audit History (`GET /variants/:id/history`)
+Returns timestamped log of review operations (`previousStatus`, `newStatus`, `reason`, `createdAt`).
 
 ---
 
-## 🔒 SSRF Protection
-
-`POST /posts` with `sourceType: "url"` enforces SSRF guard:
-- Accepts only `http:` and `https:`.
-- Blocks `localhost`, `127.0.0.1`, `::1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`.
-- Blocks internal TLDs (`.local`, `.internal`, `.lan`, `.localhost`).
-- Caps request timeout (5s) and response payload size (2MB).
-
----
-
-## ⚙️ Local Setup & Commands
+## ⚙️ Development Commands
 
 ```bash
 # Install dependencies
 npm install
 
-# Build TypeScript
+# Compile TypeScript
 npm run build
 
-# Run automated tests
+# Run Vitest test suite (41 tests)
 npm test
 
-# Start server
+# Start live development server
 npm run dev
 ```
