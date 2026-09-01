@@ -10,11 +10,13 @@
   - Built adapter strategy registry (`DiscordPublisher`, `MockXPublisher`, `MockLinkedInPublisher`).
   - Executed and verified build and automated test suite.
 
-- [ ] **Phase 2 — Content Ingestion & Variant Generation**
-  - Implement URL scraper / Markdown parser service.
-  - Build platform-specific variant generators.
-  - Implement POST /posts, GET /posts/:id, POST /posts/:id/variants, GET /variants/:id endpoints.
-  - Enforce constraint profile validation per platform.
+- [x] **Phase 2 — Content Ingestion & Variant Generation**
+  - Implemented `POST /posts` accepting Markdown and URL ingestion.
+  - Implemented SSRF security protection rejecting loopback, private IPs, internal domains, and unsafe schemes.
+  - Built canonical post repository ensuring stored DB post is single source of truth.
+  - Built `POST /posts/:id/variants` generating platform-adapted draft variants.
+  - Implemented constraint validation service (`maxLength`, `tone`, `maxHashtags`) against `platformConstraints.ts`.
+  - Executed and passed 23 automated tests (0 errors).
 
 - [ ] **Phase 3 — Review Workflow & Scheduling**
   - Implement variant approval/rejection endpoints (`POST /variants/:id/approve`, `POST /variants/:id/reject`).

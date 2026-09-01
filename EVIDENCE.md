@@ -1,32 +1,43 @@
-# Phase 1 Verification Evidence & Gate Checklist
+# Phase 2 Acceptance Evidence & Verification Checklist
 
-## Phase 1 Design Gate Checklist
+## Phase 2 Acceptance Gate Checklist
 
 | Requirements | Status | Location / Artifact |
 | :--- | :--- | :--- |
-| 1. Constraint Profile for each platform (`discord`, `mock_x`, `mock_linkedin`) | **PASS** | [platformConstraints.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/config/platformConstraints.ts), [DESIGN.md Section 2](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/DESIGN.md#2-platform-constraint-profiles) |
-| 2. `SocialPublisher` Interface Signature | **PASS** | [SocialPublisher.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/adapters/SocialPublisher.ts), [DESIGN.md Section 3](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/DESIGN.md#3-socialpublisher-interface-signature) |
-| 3. Relational Data Model (`posts`, `variants`, `slots`, `publish_attempts`) | **PASS** | [001_initial_schema.sql](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/db/migrations/001_initial_schema.sql), [DESIGN.md Section 5](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/DESIGN.md#5-relational-data-model-postgresql) |
-| 4. API Surface REST Specification | **PASS** | [DESIGN.md Section 7](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/DESIGN.md#7-api-surface-specification) |
-| 5. Explicit Non-Goals Defined | **PASS** | [DESIGN.md Section 11](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/DESIGN.md#11-explicit-non-goals) |
-| 6. State Transitions & Unapproved Guard | **PASS** | [types.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/models/types.ts), [DESIGN.md Section 6](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/DESIGN.md#6-content-review-workflow) |
-| 7. Single Publication Invariant `UNIQUE(variant_id, slot_id)` | **PASS** | [001_initial_schema.sql:L48](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/db/migrations/001_initial_schema.sql#L48), [DESIGN.md Section 8](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/DESIGN.md#8-idempotency-strategy) |
-| 8. Automated Unit Tests | **PASS** | [phase1.test.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase1.test.ts) |
+| 1. `POST /posts` Markdown ingestion -> 201 | **PASS** | [postController.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/controllers/postController.ts), [tests/phase2.test.ts:L48](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L48) |
+| 2. `POST /posts` URL ingestion -> 201 | **PASS** | [urlIngestionService.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/urlIngestionService.ts), [tests/phase2.test.ts:L63](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L63) |
+| 3. Reject missing source / empty content -> 400 | **PASS** | [postSchemas.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/validation/postSchemas.ts), [tests/phase2.test.ts:L78](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L78) |
+| 4. Reject both URL + Markdown -> 400 | **PASS** | [postSchemas.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/validation/postSchemas.ts), [tests/phase2.test.ts:L86](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L86) |
+| 5. SSRF Security (localhost, loopback, private IP, non-http) | **PASS** | [ssrfGuard.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/ssrfGuard.ts), [tests/phase2.test.ts:L116](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L116) |
+| 6. Stored Post Retrieval `GET /posts/:id` | **PASS** | [postRepository.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/postRepository.ts), [tests/phase2.test.ts:L142](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L142) |
+| 7. Variant Generation `POST /posts/:id/variants` from stored DB source | **PASS** | [variantGenerator.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/variantGenerator.ts), [tests/phase2.test.ts:L161](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L161) |
+| 8. 3 Platform Draft Variants (`discord`, `mock_x`, `mock_linkedin`) | **PASS** | [tests/phase2.test.ts:L174](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L174) |
+| 9. Platform Constraint Enforcement (Discord, Mock X, Mock LinkedIn) | **PASS** | [constraintValidator.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/constraintValidator.ts), [tests/phase2.test.ts:L186](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase2.test.ts#L186) |
 
 ---
 
-## Verification Commands Executed
+## Automated Test Results
 
-### 1. Build Verification (`npm run build`)
-- Command: `npm run build`
-- Result: Clean TypeScript compilation to `dist/` with 0 errors.
+```
+ RUN  v3.2.7 D:/Vedaang/Internship/FlyRank AI/Social Media Studio/FlyRank-AI-BE-Social-Media Studio
 
-### 2. Test Verification (`npm test`)
-- Command: `npm test`
-- Result: Vitest test suite passed 100% of tests.
+ ✓ tests/phase1.test.ts (6 tests)
+ ✓ tests/phase2.test.ts (17 tests)
 
-### 3. Git Environment Check
-- Command: `git check-ignore -v .env`
-- Result: Confirmed `.env` is ignored by `.gitignore`.
-- Command: `git diff --check`
-- Result: No trailing whitespace or formatting conflicts.
+ Test Files  2 passed (2)
+      Tests  23 passed (23)
+```
+
+---
+
+## Security Verification (SSRF Protection Evidence)
+
+The SSRF guard test suite verifies that:
+- `http://localhost:3000` -> REJECTED
+- `http://127.0.0.1/admin` -> REJECTED
+- `http://[::1]/status` -> REJECTED
+- `http://10.0.0.1/secret` -> REJECTED
+- `http://192.168.1.1/router` -> REJECTED
+- `http://169.254.169.254/latest/meta-data` -> REJECTED
+- `file:///etc/passwd` -> REJECTED
+- `https://example.com/blog/article` -> ALLOWED
