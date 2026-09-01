@@ -758,9 +758,3 @@ stateDiagram-v2
 - **TypeScript Build**: PASS (`tsc` 0 errors)
 - **Real Discord Delivery**: PASS (`externalPostId: 1544395629776609321`)
 - **Worker Crash Recovery**: PASS (Zero duplicate external publications)
-
----
-
-## 🤖 AI Disclosure
-
-This project was developed with assistance from Google DeepMind's Antigravity AI pair programmer for architecture planning, schema design, and automated test implementation. All code, database migrations, security properties, and test suites have been verified through automated execution and real Discord HTTP webhook delivery.
