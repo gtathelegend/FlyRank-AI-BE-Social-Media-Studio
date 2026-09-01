@@ -1,17 +1,62 @@
-# Phase 4 Acceptance Evidence & Verification Checklist
+# Phase 4 Acceptance Evidence & E2E Diagnostic Fix Summary
 
-## Phase 4 Acceptance Gate Checklist
+## Diagnostic & E2E Repair Summary
 
-| Requirements | Status | Location / Artifact |
+| Requirement / Component | Diagnostic Finding & Resolution | Status |
 | :--- | :--- | :--- |
-| 1. Strategy Pattern Publisher Registry (`discord`, `mock_x`, `mock_linkedin`) | **PASS** | [PublisherRegistry.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/adapters/PublisherRegistry.ts), [tests/phase4.test.ts:L78](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase4.test.ts#L78) |
-| 2. Real Discord Webhook Publisher (`DiscordPublisher` HTTP POST + 5s timeout) | **PASS** | [DiscordPublisher.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/adapters/DiscordPublisher.ts), [tests/phase4.test.ts:L116](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase4.test.ts#L116) |
-| 3. Mock Adapters (`MockXPublisher`, `MockLinkedInPublisher`) Zero Network Calls | **PASS** | [MockXPublisher.ts](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/adapters/MockXPublisher.ts), [tests/phase4.test.ts:L90](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase4.test.ts#L90) |
-| 4. Approval Security Gate Enforcement (`status === 'approved'`) | **PASS** | [publishingService.ts:L31](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/publishingService.ts#L31), [tests/phase4.test.ts:L188](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase4.test.ts#L188) |
-| 5. **Single Publication Idempotency Invariant** (`SAME VARIANT + SLOT = 1 PUBLICATION`) | **PASS** | [publishingService.ts:L63](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/publishingService.ts#L63), [tests/phase4.test.ts:L226](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase4.test.ts#L226) |
-| 6. Replay Result (`isReplay: true`) on Repeated Publishing Request | **PASS** | [publishingService.ts:L65](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/publishingService.ts#L65), [tests/phase4.test.ts:L226](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase4.test.ts#L226) |
-| 7. `publish_attempts` Ledger Persistence & Status Update to `published` | **PASS** | [postRepository.ts:L122](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/services/postRepository.ts#L122), [tests/phase4.test.ts:L260](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase4.test.ts#L260) |
-| 8. Credential & Webhook Security Isolation (Zero credentials in responses/logs) | **PASS** | [DiscordPublisher.ts:L13](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/src/adapters/DiscordPublisher.ts#L13), [tests/phase4.test.ts:L272](file:///d:/Vedaang/Internship/FlyRank%20AI/Social%20Media%20Studio/FlyRank-AI-BE-Social-Media%20Studio/tests/phase4.test.ts#L272) |
+| **POST /posts 500 Fix** | 1) Handled body-parser JSON syntax errors in `app.ts` as HTTP 400.<br>2) Updated `createPostSchema` to support `body` alias and default `sourceType`. | **PASS** |
+| **PostgreSQL Database Connection** | Implemented `src/db/db.ts` to connect to PostgreSQL 16 (`social_studio_postgres`) and auto-apply `001_initial_schema.sql` on startup. | **PASS** |
+| **E2E Post Creation** | Canonical post created successfully in PostgreSQL. | **PASS** |
+| **E2E Variant Generation** | Generated 3 draft variants (`discord`, `mock_x`, `mock_linkedin`). | **PASS** |
+| **E2E Human Approval** | Discord variant transitioned from `draft` to `approved`. | **PASS** |
+| **E2E Scheduling Slot** | Created schedule `Slot` entry in database. | **PASS** |
+| **Real Discord Publish** | Delivered message to real Discord channel (`externalPostId: 1544393841488957530`). | **PASS** |
+| **Idempotency Replay Verification** | Repeated identical publish request returned `isReplay: true` without sending duplicate Discord message. | **PASS** |
+
+---
+
+## E2E Execution Terminal Log Proof
+
+```
+--- STARTING E2E VERIFICATION ---
+[Database] Connected to PostgreSQL at localhost:5432/social_studio
+[Database] Schema migration 001_initial_schema.sql applied successfully.
+
+1. Creating Canonical Post...
+-> Post Created: 09b799cf-fef0-4b83-87a9-a0e11cc53561
+
+2. Generating Platform Variants...
+-> 3 Variants Generated: [
+  'discord: 91b4976b-a879-48c2-8316-8b45aee08c16 (draft)',
+  'mock_x: 8606a2bc-5a30-4baf-b8d4-cab0f1cc7f32 (draft)',
+  'mock_linkedin: 33413ae4-52b0-47c4-a7e7-ad87bd83403e (draft)'
+]
+
+3. Approving Discord Variant...
+-> Variant Status Updated to: approved
+
+4. Creating Scheduling Slot...
+-> Slot Created: e9c7bb58-440b-48e5-94f3-67fdb6c97fe0
+
+5. Publishing to Real Discord Webhook...
+-> First Publish Result: {
+  attemptId: '51c9544e-91e3-4705-a9bc-b00a608cf900',
+  status: 'success',
+  isReplay: false,
+  externalPostId: '1544393841488957530',
+  variantStatus: 'published'
+}
+
+6. Repeating Identical Publish Request (Idempotency Check)...
+-> Second Publish Result: {
+  attemptId: '51c9544e-91e3-4705-a9bc-b00a608cf900',
+  status: 'success',
+  isReplay: true,
+  externalPostId: '1544393841488957530'
+}
+
+✅ IDEMPOTENCY VERIFIED SUCCESSFULLY! Replay returned existing attempt without duplicate webhook call.
+```
 
 ---
 
@@ -28,12 +73,3 @@
  Test Files  4 passed (4)
       Tests  54 passed (54)
 ```
-
----
-
-## Security Verification (Zero Credential Leak Proof)
-
-Automated tests in `tests/phase4.test.ts` verify that:
-- Discord Webhook URL tokens are NEVER included in `PublishResult` or HTTP API JSON responses.
-- Unhandled internal database errors or stack traces are suppressed in production.
-- `.env` is confirmed gitignored by `git check-ignore -v .env`.

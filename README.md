@@ -16,7 +16,7 @@ Backend service for content ingestion, platform variant generation, multi-stage 
 - **Runtime**: Node.js (v20+ / v24+)
 - **Language**: TypeScript
 - **Web Framework**: Express
-- **Database**: PostgreSQL 16
+- **Database**: PostgreSQL 16 (with auto-migration `001_initial_schema.sql`)
 - **Queue / Scheduling**: BullMQ + Redis
 - **Validation**: Zod
 - **Testing**: Vitest
@@ -24,7 +24,18 @@ Backend service for content ingestion, platform variant generation, multi-stage 
 
 ---
 
-## 🔌 Publishing Adapters & Strategy Registry (Phase 4)
+## 🗄️ Database & Schema Setup
+
+PostgreSQL is automatically initialized on application startup. When starting the development server (`npm run dev` or `npm start`), the application connects to PostgreSQL via `DATABASE_URL` and applies `src/db/migrations/001_initial_schema.sql` automatically.
+
+### Start PostgreSQL & Redis Services
+```bash
+docker compose up -d
+```
+
+---
+
+## 🔌 Publishing Adapters & Strategy Registry
 
 ```
 SocialPublisher (Interface Contract)
@@ -46,52 +57,37 @@ $$\text{SAME VARIANT} + \text{SAME SLOT} = \text{EXACTLY ONE SUCCESSFUL PUBLICAT
 
 ---
 
-## 📡 API Endpoints (Phase 4 Additions)
+## 📡 API Workflow Summary
 
-### 1. Publish Approved Variant (`POST /variants/:id/publish`)
-Executes publication via target social adapter, records publication attempt in DB ledger, and updates variant status to `published`.
-- **Request Body**: `{ "slotId": "slot-uuid" }`
-- **Response** (`200 OK`):
+### 1. Ingest Content (`POST /posts`)
+Flexibly supports Markdown or URL ingestion:
 ```json
 {
-  "attemptId": "att-123",
-  "variantId": "var-456",
-  "slotId": "slot-789",
-  "status": "success",
-  "isReplay": false,
-  "externalPostId": "9876543210",
-  "publishedAt": "2026-09-01T22:17:00.000Z",
-  "url": null
+  "sourceType": "markdown",
+  "title": "FlyRank Discord E2E Test",
+  "content": "This is an end-to-end test of the FlyRank Social Media Studio publishing pipeline."
+}
+```
+*(Also supports `"body"` as an alias for `"content"` and defaults `sourceType` to `"markdown"` if omitted).*
+
+### 2. Generate Variants (`POST /posts/:id/variants`)
+Generates platform draft variants (`discord`, `mock_x`, `mock_linkedin`).
+
+### 3. Approve Variant (`POST /variants/:id/approve`)
+Validates platform constraints and transitions status to `approved`.
+
+### 4. Create Scheduling Slot (`POST /variants/:id/schedule`)
+```json
+{
+  "scheduledAt": "2026-09-05T12:00:00.000Z"
 }
 ```
 
-### 2. Get Variant Publish Attempts (`GET /variants/:id/attempts`)
-- **Response** (`200 OK`): Retransmits array of execution attempt ledger entries for the variant.
+### 5. Publish to Real Discord Webhook (`POST /variants/:id/publish`)
+Executes publication via `DiscordPublisher`, records attempt in PostgreSQL `publish_attempts` table, and updates status to `published`.
 
-### 3. Inspect Publish Attempt (`GET /publish-attempts/:id`)
-- **Response** (`200 OK`): Detailed attempt record.
-
----
-
-## 🧪 Manual Discord Integration Test Instructions
-
-To verify real Discord Webhook publishing locally:
-
-1. Create a channel in your Discord server and create a Webhook integration URL.
-2. Add the URL to your local `.env` file:
-   ```env
-   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_TOKEN
-   ```
-3. Run the development server: `npm run dev`
-4. Post a markdown document (`POST /posts`).
-5. Generate variants (`POST /posts/:id/variants`).
-6. Approve the Discord variant (`POST /variants/:id/approve`).
-7. Publish the variant (`POST /variants/:id/publish`).
-8. Verify message delivery in your Discord channel!
-9. Repeat step 7 to verify idempotent replay (`isReplay: true`, zero duplicate Discord messages).
-
-> [!CAUTION]
-> NEVER commit `.env` or write Discord Webhook credentials into documentation, tests, logs, or evidence files.
+### 6. Idempotent Replay Verification (`POST /variants/:id/publish`)
+Repeating the identical request returns `isReplay: true` with the stored execution attempt without re-calling the Discord webhook.
 
 ---
 

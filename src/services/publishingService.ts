@@ -29,10 +29,7 @@ export class PublishingService {
       throw err;
     }
 
-    // 2. APPROVAL GATE ENFORCEMENT: Only approved variants can enter publication pipeline
-    assertVariantApprovedForScheduling(variant);
-
-    // 3. Verify associated post exists
+    // 2. Verify associated post exists
     const post = await postRepository.getPostById(variant.post_id);
     if (!post) {
       const err = new Error(`Associated post not found with ID: ${variant.post_id}`);
@@ -40,7 +37,7 @@ export class PublishingService {
       throw err;
     }
 
-    // 4. Resolve or create slot context
+    // 3. Resolve or create slot context
     let slotId: string;
     if (slotIdInput) {
       const slot = await postRepository.getSlotById(slotIdInput);
@@ -60,11 +57,14 @@ export class PublishingService {
       }
     }
 
-    // 5. Derive deterministic publication identity: SAME VARIANT + SAME SLOT = EXACTLY ONE PUBLICATION
+    // 4. Derive deterministic publication identity: SAME VARIANT + SAME SLOT = EXACTLY ONE PUBLICATION
     const idempotencyKey = customIdempotencyKey || `${variantId}:${slotId}`;
 
-    // 6. IDEMPOTENCY CHECK: Inspect DB ledger for pre-existing successful attempt
-    const existingAttempt = await postRepository.getPublishAttemptByIdempotencyKey(idempotencyKey);
+    // 5. IDEMPOTENCY CHECK: Inspect DB ledger for pre-existing successful attempt BEFORE approval check
+    const existingAttempt =
+      (await postRepository.getPublishAttemptByIdempotencyKey(idempotencyKey)) ||
+      (await postRepository.getPublishAttemptByVariantAndSlot(variantId, slotId));
+
     if (existingAttempt && existingAttempt.status === 'success') {
       return {
         attempt: existingAttempt,
@@ -73,6 +73,9 @@ export class PublishingService {
         url: (existingAttempt.metadata as any)?.url || null
       };
     }
+
+    // 6. APPROVAL GATE ENFORCEMENT: For new publications, only approved variants can enter pipeline
+    assertVariantApprovedForScheduling(variant);
 
     // 7. Record pending attempt in DB ledger
     const attempt = await postRepository.createPublishAttempt({

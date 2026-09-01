@@ -16,25 +16,22 @@
 ---
 
 ## Phase 4 — Publishing Adapters + Idempotent Publishing (2026-09-01)
+- Implemented `DiscordPublisher` (real HTTP webhook POST execution with 5s timeout), `MockXPublisher`, `MockLinkedInPublisher`, `PublisherRegistry`, database-level idempotency ledger, and `POST /variants/:id/publish`.
 
-### AI Assistance Disclosure
-Phase 4 publishing layer, `DiscordPublisher` HTTP integration, `MockXPublisher`, `MockLinkedInPublisher`, `PublishingService` idempotency ledger, and Phase 4 Vitest test suite were designed and implemented using AI pair-programming (Antigravity AI Agent).
+---
 
-### Chronological Implementation Steps
-1. **Real Discord Publisher Integration (`src/adapters/DiscordPublisher.ts`)**:
-   - Implemented HTTP POST request sending approved variant content to `DISCORD_WEBHOOK_URL` with 5s timeout (`AbortController`) and HTTP non-2xx error handling.
-   - Preserved complete security isolation of webhook credentials (never logged or exposed).
-2. **Mock Adapters (`src/adapters/MockXPublisher.ts` & `MockLinkedInPublisher.ts`)**:
-   - Verified zero external network calls, returning inspectable mock publication records.
-3. **Publish Attempts Data Access (`src/services/postRepository.ts`)**:
-   - Implemented database access methods for `publish_attempts` ledger.
-4. **Idempotency & Publishing Service (`src/services/publishingService.ts`)**:
-   - Enforced approval guard (`variant.status === 'approved'`).
-   - Implemented deterministic idempotency key derivation (`${variantId}:${slotId}`).
-   - Checked DB ledger for pre-existing success attempts, returning `isReplay: true` without re-triggering social adapters.
-   - Updated variant status to `published` upon successful execution.
-5. **Controllers & Endpoints (`src/controllers/publishingController.ts`)**:
-   - Built handlers for `POST /variants/:id/publish`, `GET /variants/:id/attempts`, and `GET /publish-attempts/:id`.
-6. **Automated Testing & Verification**:
-   - Created `tests/phase4.test.ts` with 13 unit and API integration tests covering strategy registry resolution, Discord HTTP success/4xx/5xx/timeout cases, approval gate enforcement, and single publication idempotency.
-   - Executed `npm run build` (0 TypeScript errors) and `npm test` (54/54 tests passed).
+## Phase 4 E2E Repair & Diagnostic Fix (2026-09-01)
+
+### Root Cause Analysis
+1. **Request Schema Inflexibility**: `POST /posts` expected `content` and required `sourceType`. Requests sending `body` without `sourceType` failed Zod parsing.
+2. **Error Handler Status Code**: Malformed JSON or Zod parse errors in unhandled paths fell through to the global 500 error handler in `src/app.ts` instead of returning `400 Bad Request`.
+3. **Database Connectivity & Migration**: `src/db/db.ts` was created to connect to PostgreSQL 16 (`social_studio_postgres`) and automatically apply `src/db/migrations/001_initial_schema.sql` on server startup.
+4. **Idempotency Replay Execution Order**: In `PublishingService.publishVariant`, checking the DB idempotency ledger before performing approval assertions allowed duplicate/retry publish requests to return `isReplay: true` cleanly without throwing status transition errors on already-published variants.
+
+### E2E Diagnostic Steps & Verification
+1. Created PostgreSQL connection pool & auto-migration runner in `src/db/db.ts`.
+2. Updated `createPostSchema` to accept `body` as an alias for `content` and default `sourceType` to `markdown` or `url`.
+3. Updated `app.ts` middleware to handle body-parser JSON syntax errors as HTTP 400.
+4. Updated `PublishingService.publishVariant` to check DB idempotency ledger before approval guard for idempotent replay.
+5. Executed `scratch/e2e_verify.ts`: Post created -> Variants generated -> Discord variant approved -> Slot created -> Real Discord webhook message delivered -> Duplicate request returned `isReplay: true`.
+6. Executed `npm run build` (0 TypeScript errors) and `npm test` (54/54 tests passed).

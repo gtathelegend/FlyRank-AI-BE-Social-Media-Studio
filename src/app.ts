@@ -11,11 +11,26 @@ app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'ok',
     service: 'Social Media Studio API',
-    phase: 2,
+    phase: 4,
     timestamp: new Date().toISOString()
   });
 });
 
+// JSON Syntax Error Middleware (Catches malformed JSON payloads and returns 400)
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof SyntaxError && 'status' in err && (err as any).status === 400 && 'body' in err) {
+    res.status(400).json({
+      error: {
+        code: 'INVALID_JSON',
+        message: 'Malformed JSON payload provided in request body.'
+      }
+    });
+    return;
+  }
+  next(err);
+});
+
+// Global Error Middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled API Error:', err.message);
   res.status(500).json({
